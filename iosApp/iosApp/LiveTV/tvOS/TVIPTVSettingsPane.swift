@@ -65,13 +65,13 @@ struct TVIPTVSettingsPane: View {
                     TVSettingsInfoRow(title: "Account", value: account.status ?? "Unknown")
                     if let expiry = account.expiryDate { TVSettingsInfoRow(title: "Subscription expires", value: expiry.formatted(date: .long, time: .omitted)) }
                 }
-                Button("Edit IPTV Provider") { model.showsEditor = true }.buttonStyle(TVSettingsPaneRowStyle()).focused($detailFocus, equals: .iptvEdit)
-                Button(model.isWorking ? "Refreshing…" : "Refresh Channels and Guide") { Task { await model.refresh() } }.disabled(model.isWorking).buttonStyle(TVSettingsPaneRowStyle()).focused($detailFocus, equals: .iptvRefresh)
-                Button("Clear IPTV Cache") { Task { await model.clearCache() } }.buttonStyle(TVSettingsPaneRowStyle()).focused($detailFocus, equals: .iptvClearCache)
-                Button("Remove IPTV Provider") { model.remove() }.buttonStyle(TVSettingsPaneRowStyle(isDestructive: true)).focused($detailFocus, equals: .iptvRemove)
+                Button("Edit IPTV Provider") { model.showsEditor = true }.buttonStyle(TVSettingsPaneRowStyle()).focused(detailFocus, equals: .iptvEdit)
+                Button(model.isWorking ? "Refreshing…" : "Refresh Channels and Guide") { Task { await model.refresh() } }.disabled(model.isWorking).buttonStyle(TVSettingsPaneRowStyle()).focused(detailFocus, equals: .iptvRefresh)
+                Button("Clear IPTV Cache") { Task { await model.clearCache() } }.buttonStyle(TVSettingsPaneRowStyle()).focused(detailFocus, equals: .iptvClearCache)
+                Button("Remove IPTV Provider") { model.remove() }.buttonStyle(TVSettingsPaneRowStyle(isDestructive: true)).focused(detailFocus, equals: .iptvRemove)
             } else {
                 Text("Connect an Xtream Codes provider to add live channels and programme information. Credentials are stored in the Apple TV Keychain.").foregroundStyle(.secondary).padding(.horizontal, 24)
-                Button("Add IPTV Provider") { model.showsEditor = true }.buttonStyle(TVSettingsPaneRowStyle()).focused($detailFocus, equals: .iptvEdit)
+                Button("Add IPTV Provider") { model.showsEditor = true }.buttonStyle(TVSettingsPaneRowStyle()).focused(detailFocus, equals: .iptvEdit)
             }
             if let message = model.statusMessage { Text(message).foregroundStyle(message == "Connected" ? Color.siloSuccess : Color.siloSecondaryText).padding(.horizontal, 24) }
         }
