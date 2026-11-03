@@ -44,6 +44,5 @@ final class LiveTVPlaybackCoordinator {
     }
 
     func stop() { loadTask?.cancel(); loadTask = nil; playback.stop() }
-    deinit { loadTask?.cancel() }
 }
 #endif

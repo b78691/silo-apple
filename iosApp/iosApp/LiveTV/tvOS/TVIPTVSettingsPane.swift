@@ -54,7 +54,7 @@ private final class IPTVSettingsModel {
 
 struct TVIPTVSettingsPane: View {
     @State private var model = IPTVSettingsModel()
-    @Binding var detailFocus: TVSettingsDetailFocus?
+    let detailFocus: FocusState<TVSettingsDetailFocus?>.Binding
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {

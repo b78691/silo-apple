@@ -11,7 +11,7 @@ private extension KeyedDecodingContainer where Key == AnyCodingKey {
     func string(_ key: String) -> String? {
         guard let codingKey = AnyCodingKey(stringValue: key) else { return nil }
         if let value = try? decodeIfPresent(String.self, forKey: codingKey) { return value }
-        if let value = try? decodeIfPresent(Int.self, forKey: codingKey) { return value.map(String.init) }
+        if let value = try? decodeIfPresent(Int.self, forKey: codingKey) { return String(value) }
         return nil
     }
     func int(_ key: String) -> Int? { string(key).flatMap(Int.init) }

@@ -7,7 +7,7 @@ final class XMLTVParser: NSObject, XMLParserDelegate, @unchecked Sendable {
     private var text = ""
     private var title = ""
     private var subtitle: String?
-    private var description: String?
+    private var programmeDescription: String?
 
     func parse(data: Data) throws -> [EPGProgramme] {
         programmes = []
@@ -19,7 +19,7 @@ final class XMLTVParser: NSObject, XMLParserDelegate, @unchecked Sendable {
 
     func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes attributeDict: [String : String] = [:]) {
         element = elementName; text = ""
-        if elementName == "programme" { attributes = attributeDict; title = ""; subtitle = nil; description = nil }
+        if elementName == "programme" { attributes = attributeDict; title = ""; subtitle = nil; programmeDescription = nil }
     }
 
     func parser(_ parser: XMLParser, foundCharacters string: String) { text += string }
@@ -28,11 +28,11 @@ final class XMLTVParser: NSObject, XMLParserDelegate, @unchecked Sendable {
         let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if elementName == "title" { title = value }
         else if elementName == "sub-title" { subtitle = value }
-        else if elementName == "desc" { description = value }
+        else if elementName == "desc" { programmeDescription = value }
         else if elementName == "programme", let channel = attributes["channel"],
                 let start = Self.date(attributes["start"]), let end = Self.date(attributes["stop"]), end > start {
             programmes.append(.init(id: "\(channel)-\(Int(start.timeIntervalSince1970))", channelID: channel,
-                title: title.isEmpty ? "Programme" : title, subtitle: subtitle, description: description, start: start, end: end))
+                title: title.isEmpty ? "Programme" : title, subtitle: subtitle, description: programmeDescription, start: start, end: end))
         }
         text = ""
     }
