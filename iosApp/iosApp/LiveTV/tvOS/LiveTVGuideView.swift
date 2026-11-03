@@ -13,6 +13,10 @@ private enum GuideStyle {
     static var timelineWidth: CGFloat { CGFloat(hours * 60) * minuteWidth }
 }
 
+private enum GuideFilter: Hashable {
+    case all, favourites, recent, category(String)
+}
+
 struct LiveTVChipStyle: ButtonStyle {
     let isSelected: Bool
     func makeBody(configuration: Configuration) -> some View {
@@ -37,6 +41,28 @@ struct LiveTVChipStyle: ButtonStyle {
     }
 }
 
+private struct GuideSidebarStyle: ButtonStyle {
+    let isSelected: Bool
+    func makeBody(configuration: Configuration) -> some View {
+        Body(configuration: configuration, isSelected: isSelected)
+    }
+
+    private struct Body: View {
+        let configuration: ButtonStyleConfiguration
+        let isSelected: Bool
+        @Environment(\.isFocused) private var focused
+        var body: some View {
+            configuration.label
+                .font(.system(size: 20, weight: isSelected ? .bold : .medium))
+                .padding(.horizontal, 15).padding(.vertical, 13)
+                .foregroundStyle(.white)
+                .background(focused || isSelected ? Color(red: 0.69, green: 0.23, blue: 0.75) : Color.clear, in: RoundedRectangle(cornerRadius: 11))
+                .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(focused ? .white : .clear, lineWidth: 2))
+                .focusEffectDisabled()
+        }
+    }
+}
+
 @MainActor @Observable
 private final class GuideSelection {
     var channel: LiveChannel?
@@ -52,10 +78,20 @@ struct LiveTVGuideView: View {
     let play: (LiveChannel) -> Void
     @State private var selection = GuideSelection()
     @State private var anchor = LiveTVGuideView.rounded(Date()).addingTimeInterval(-1800)
-    @State private var categoryID: String?
+    @State private var filter: GuideFilter = .all
 
     private var channels: [LiveChannel] {
-        store.filteredChannels.filter { categoryID == nil || $0.categoryID == categoryID }
+        let matching = store.filteredChannels
+        switch filter {
+        case .all: return matching
+        case .favourites:
+            let ids = IPTVPreferencesStore.shared.favoriteChannelIDs
+            return matching.filter { ids.contains($0.id) }
+        case .recent:
+            let byID = Dictionary(uniqueKeysWithValues: matching.map { ($0.id, $0) })
+            return IPTVPreferencesStore.shared.recentChannelIDs.compactMap { byID[$0] }
+        case .category(let id): return matching.filter { $0.categoryID == id }
+        }
     }
 
     private var selectedChannel: LiveChannel? { selection.channel ?? channels.first }
@@ -67,19 +103,60 @@ struct LiveTVGuideView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
-            hero
-            categoryRail
-            HStack(spacing: 16) {
-                Button { anchor = anchor.addingTimeInterval(-7200) } label: { Label("Earlier", systemImage: "chevron.left") }
-                Button("Now") { anchor = Self.rounded(Date()).addingTimeInterval(-1800) }
-                Button { anchor = anchor.addingTimeInterval(7200) } label: { Label("Later", systemImage: "chevron.right") }
+            HStack {
+                Label("Live TV", systemImage: "dot.radiowaves.left.and.right")
+                    .font(.system(size: 43, weight: .bold))
                 Spacer()
-                Text("Select a programme for details · Select a live programme to watch")
-                    .font(.system(size: 17)).foregroundStyle(.white.opacity(0.55))
-            }.buttonStyle(LiveTVChipStyle(isSelected: false))
-            guideGrid
+                TextField("Search channels", text: $store.query).frame(width: 350)
+            }
+            HStack(alignment: .top, spacing: 24) {
+                sidebar
+                VStack(alignment: .leading, spacing: 15) {
+                    hero
+                    HStack(spacing: 16) {
+                        Button { anchor = anchor.addingTimeInterval(-7200) } label: { Label("Earlier", systemImage: "chevron.left") }
+                        Button("Now") { anchor = Self.rounded(Date()).addingTimeInterval(-1800) }
+                        Button { anchor = anchor.addingTimeInterval(7200) } label: { Label("Later", systemImage: "chevron.right") }
+                        Spacer()
+                    }.buttonStyle(LiveTVChipStyle(isSelected: false))
+                    guideGrid
+                }
+            }
         }
-        .onChange(of: categoryID) { _, _ in selection.select(channels.first, nil) }
+        .onChange(of: filter) { _, _ in selection.select(channels.first, nil) }
+    }
+
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            Text("CHANNELS").font(.system(size: 16, weight: .bold))
+                .foregroundStyle(.white.opacity(0.5)).padding(.horizontal, 15)
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 7) {
+                    sidebarButton("All Channels", icon: "rectangle.grid.1x2", filter: .all)
+                    sidebarButton("Favourites", icon: "heart", filter: .favourites)
+                    sidebarButton("Recently Watched", icon: "clock.arrow.circlepath", filter: .recent)
+                    Text("CATEGORIES").font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.5)).padding(.horizontal, 15).padding(.top, 21)
+                    ForEach(store.categories) { category in
+                        sidebarButton(category.name, icon: "square.stack", filter: .category(category.id))
+                    }
+                }
+            }.scrollIndicators(.hidden)
+        }
+        .frame(width: 245).frame(maxHeight: .infinity, alignment: .topLeading)
+        .padding(.vertical, 17)
+        .background(GuideStyle.tile, in: RoundedRectangle(cornerRadius: 19))
+        .focusSection()
+    }
+
+    private func sidebarButton(_ title: String, icon: String, filter item: GuideFilter) -> some View {
+        Button {
+            filter = item
+        } label: {
+            Label(title, systemImage: icon).lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .buttonStyle(GuideSidebarStyle(isSelected: filter == item))
     }
 
     private var hero: some View {
@@ -123,18 +200,12 @@ struct LiveTVGuideView: View {
         .background(LinearGradient(colors: [GuideStyle.violet.opacity(0.26), GuideStyle.rose.opacity(0.08), GuideStyle.tile], startPoint: .topTrailing, endPoint: .bottomLeading), in: RoundedRectangle(cornerRadius: 24))
     }
 
-    private var categoryRail: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 10) {
-                Button("All Channels") { categoryID = nil }.buttonStyle(LiveTVChipStyle(isSelected: categoryID == nil))
-                ForEach(store.categories) { category in
-                    Button(category.name) { categoryID = category.id }.buttonStyle(LiveTVChipStyle(isSelected: categoryID == category.id))
-                }
-            }
-        }.scrollIndicators(.hidden)
-    }
-
     private var guideGrid: some View {
+        Group {
+        if channels.isEmpty {
+            ContentUnavailableView("No channels in this section", systemImage: "tv", description: Text("Choose another category or change your search."))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
         ScrollView(.vertical) {
             HStack(alignment: .top, spacing: 8) {
                 LazyVStack(spacing: 6) {
@@ -168,6 +239,8 @@ struct LiveTVGuideView: View {
         }
         .scrollIndicators(.hidden)
         .focusSection()
+        }
+        }
     }
 
     private var timeRuler: some View {

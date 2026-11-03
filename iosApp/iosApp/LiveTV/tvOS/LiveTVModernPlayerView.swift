@@ -180,7 +180,7 @@ struct LiveTVModernPlayerView: View {
                     .buttonStyle(TVSettingsPaneRowStyle())
                 ForEach(coordinator.engine.subtitleTracks, id: \.id) { track in
                     Button(track.name.isEmpty ? "Subtitles \(track.id)" : track.name) {
-                        coordinator.playback.selectSubtitleTrack(id: track.id); revealControls()
+                        coordinator.playback.selectSubtitleTrack(id: Int64(track.id)); revealControls()
                     }.buttonStyle(TVSettingsPaneRowStyle())
                 }
             }
