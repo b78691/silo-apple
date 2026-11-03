@@ -20,6 +20,7 @@ final class LiveTVStore {
     private let cache: IPTVCache
     private var refreshTask: Task<Void, Never>?
     private var epgTasks: [Int: Task<Void, Never>] = [:]
+    private let epgRequestGate = IPTVEPGRequestGate(limit: 6)
     private var xmlTVTask: Task<Void, Never>?
 
     init(api: XtreamAPIClient = XtreamAPIClient(), credentials: IPTVCredentialStore = IPTVCredentialStore(), cache: IPTVCache = .shared) {
@@ -50,14 +51,15 @@ final class LiveTVStore {
         guard let provider = IPTVPreferencesStore.shared.provider else { phase = .unconfigured; return }
         if channels.isEmpty, let snapshot = await cache.load(providerID: provider.id) { apply(snapshot) }
         if channels.isEmpty { await refresh() }
-        else { phase = .ready; Task { await refresh(silent: true) } }
+        else { phase = .ready }
     }
 
-    func refresh(silent: Bool = false) async {
+    func refresh(silent: Bool = false, includeXMLTV: Bool = false) async {
         refreshTask?.cancel()
         refreshError = nil
         guard let provider = IPTVPreferencesStore.shared.provider else { phase = .unconfigured; return }
         if !silent { phase = .loading }
+        let previousProgrammes = programmes
         let task = Task { [api, credentials, cache] in
             do {
                 guard let login = try credentials.load() else { throw IPTVError.credentialsMissing }
@@ -67,10 +69,10 @@ final class LiveTVStore {
                 let result = try await (account, categories, channels)
                 guard !Task.isCancelled else { return }
                 let snapshot = IPTVSnapshot(providerID: provider.id, savedAt: Date(), account: result.0,
-                    categories: result.1, channels: result.2, programmes: [:])
+                    categories: result.1, channels: result.2, programmes: previousProgrammes)
                 try? await cache.save(snapshot)
                 await MainActor.run { self.apply(snapshot) }
-                await MainActor.run { self.loadXMLTV(provider: provider, credentials: login) }
+                if includeXMLTV { await MainActor.run { self.loadXMLTV(provider: provider, credentials: login) } }
             } catch is CancellationError { }
             catch {
                 await MainActor.run {
@@ -87,16 +89,19 @@ final class LiveTVStore {
     func loadEPG(for channel: LiveChannel) {
         guard programmesForChannel(channel).isEmpty, epgTasks[channel.id] == nil,
               let provider = IPTVPreferencesStore.shared.provider else { return }
-        epgTasks[channel.id] = Task { [api, credentials] in
+        epgTasks[channel.id] = Task { [api, credentials, epgRequestGate] in
             defer { Task { @MainActor in self.epgTasks[channel.id] = nil } }
             do {
+                await epgRequestGate.enter()
+                defer { Task { await epgRequestGate.leave() } }
+                try Task.checkCancellation()
                 guard let login = try credentials.load() else { return }
                 let rows: [EPGProgramme]
                 do { rows = try await api.shortEPG(provider: provider, credentials: login, channelID: channel.id) }
                 catch { rows = try await api.simpleDataTable(provider: provider, credentials: login, channelID: channel.id) }
                 guard !Task.isCancelled else { return }
                 let key = channel.epgChannelID ?? String(channel.id)
-                await MainActor.run { self.programmes[key] = rows }
+                await MainActor.run { self.programmes[key] = rows.sorted { $0.start < $1.start } }
             } catch { }
         }
     }
@@ -134,7 +139,7 @@ final class LiveTVStore {
         account = snapshot.account
         categories = IPTVPreferencesStore.shared.orderedCategories(snapshot.categories)
         channels = snapshot.channels.sorted { ($0.number ?? Int.max, $0.name) < ($1.number ?? Int.max, $1.name) }
-        programmes = snapshot.programmes.mapValues { $0.sorted { $0.start < $1.start } }
+        programmes = snapshot.programmes
         phase = .ready
     }
 
@@ -150,5 +155,25 @@ final class LiveTVStore {
                 try? await cache.save(snapshot)
             } catch { /* Short EPG remains available when XMLTV is unsupported. */ }
         }
+    }
+}
+
+private actor IPTVEPGRequestGate {
+    let limit: Int
+    private var active = 0
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    init(limit: Int) { self.limit = limit }
+
+    func enter() async {
+        if active < limit { active += 1; return }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            waiters.append(continuation)
+        }
+    }
+
+    func leave() {
+        if waiters.isEmpty { active -= 1 }
+        else { waiters.removeFirst().resume() }
     }
 }

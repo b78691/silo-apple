@@ -14,7 +14,7 @@ final class XMLTVParser: NSObject, XMLParserDelegate, @unchecked Sendable {
         let parser = XMLParser(data: data)
         parser.delegate = self
         guard parser.parse() else { throw IPTVError.malformedResponse }
-        return programmes.sorted { ($0.channelID, $0.start) < ($1.channelID, $1.start) }
+        return programmes
     }
 
     func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes attributeDict: [String : String] = [:]) {

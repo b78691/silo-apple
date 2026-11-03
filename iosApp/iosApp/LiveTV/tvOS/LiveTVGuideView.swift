@@ -10,6 +10,7 @@ private enum GuideStyle {
     static let hours = 6
     static let rowHeight: CGFloat = 76
     static let channelWidth: CGFloat = 255
+    static let pageSize = 24
     static var timelineWidth: CGFloat { CGFloat(hours * 60) * minuteWidth }
 }
 
@@ -82,6 +83,7 @@ struct LiveTVGuideView: View {
     @State private var isRefreshing = false
     @State private var refreshMessage: String?
     @State private var showingCategoryOrder = false
+    @State private var channelPage = 0
 
     private var channels: [LiveChannel] {
         let matching = store.filteredChannels
@@ -97,7 +99,13 @@ struct LiveTVGuideView: View {
         }
     }
 
-    private var selectedChannel: LiveChannel? { selection.channel ?? channels.first }
+    private var selectedChannel: LiveChannel? { selection.channel ?? visibleChannels.first }
+    private var pageCount: Int { max(1, (channels.count + GuideStyle.pageSize - 1) / GuideStyle.pageSize) }
+    private var currentPage: Int { min(channelPage, pageCount - 1) }
+    private var visibleChannels: [LiveChannel] {
+        let start = currentPage * GuideStyle.pageSize
+        return Array(channels.dropFirst(start).prefix(GuideStyle.pageSize))
+    }
     private var selectedProgramme: EPGProgramme? {
         if let programme = selection.programme { return programme }
         guard let selectedChannel else { return nil }
@@ -121,6 +129,15 @@ struct LiveTVGuideView: View {
                         Button("Now") { anchor = Self.rounded(Date()).addingTimeInterval(-1800) }
                         Button { anchor = anchor.addingTimeInterval(7200) } label: { Label("Later", systemImage: "chevron.right") }
                         Spacer()
+                        Button { changePage(-1) } label: { Image(systemName: "chevron.up").frame(width: 24) }
+                            .disabled(currentPage == 0)
+                            .accessibilityLabel("Previous channels")
+                        Text("\(currentPage + 1) / \(pageCount)")
+                            .font(.system(size: 18, weight: .semibold)).monospacedDigit()
+                            .foregroundStyle(.white.opacity(0.75))
+                        Button { changePage(1) } label: { Image(systemName: "chevron.down").frame(width: 24) }
+                            .disabled(currentPage >= pageCount - 1)
+                            .accessibilityLabel("Next channels")
                         if let refreshMessage {
                             Text(refreshMessage).font(.system(size: 16)).foregroundStyle(.white.opacity(0.67)).lineLimit(1)
                         }
@@ -129,7 +146,7 @@ struct LiveTVGuideView: View {
                             isRefreshing = true
                             refreshMessage = nil
                             Task {
-                                await store.refresh(silent: true)
+                                await store.refresh(silent: true, includeXMLTV: true)
                                 refreshMessage = store.refreshError ?? "Playlist updated"
                                 isRefreshing = false
                             }
@@ -144,7 +161,8 @@ struct LiveTVGuideView: View {
                 }
             }
         }
-        .onChange(of: filter) { _, _ in selection.select(channels.first, nil) }
+        .onChange(of: filter) { _, _ in resetPage() }
+        .onChange(of: store.query) { _, _ in resetPage() }
         .sheet(isPresented: $showingCategoryOrder) {
             LiveTVCategoryOrderView(categories: store.categories) { ids in
                 store.reorderCategories(ids)
@@ -187,6 +205,16 @@ struct LiveTVGuideView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .buttonStyle(GuideSidebarStyle(isSelected: filter == item))
+    }
+
+    private func resetPage() {
+        channelPage = 0
+        selection.select(visibleChannels.first, nil)
+    }
+
+    private func changePage(_ delta: Int) {
+        channelPage = min(max(0, currentPage + delta), pageCount - 1)
+        selection.select(visibleChannels.first, nil)
     }
 
     private var hero: some View {
@@ -241,7 +269,7 @@ struct LiveTVGuideView: View {
                 LazyVStack(spacing: 6) {
                     Text("CHANNELS").font(.system(size: 17, weight: .bold)).foregroundStyle(.white.opacity(0.55))
                         .frame(width: GuideStyle.channelWidth, height: 40, alignment: .leading)
-                    ForEach(channels) { channel in
+                    ForEach(visibleChannels) { channel in
                         GuideChannelCell(channel: channel, store: store, selection: selection, play: play)
                     }
                 }.frame(width: GuideStyle.channelWidth)
@@ -250,7 +278,7 @@ struct LiveTVGuideView: View {
                         timeRuler
                         ZStack(alignment: .topLeading) {
                             LazyVStack(spacing: 6) {
-                                ForEach(channels) { channel in
+                                ForEach(visibleChannels) { channel in
                                     GuideProgrammeRow(channel: channel, store: store, anchor: anchor, selection: selection, play: play)
                                 }
                             }
@@ -262,7 +290,7 @@ struct LiveTVGuideView: View {
                                         .allowsHitTesting(false).accessibilityHidden(true)
                                 }
                             }
-                        }.frame(width: GuideStyle.timelineWidth, height: CGFloat(channels.count) * (GuideStyle.rowHeight + 6), alignment: .topLeading)
+                        }.frame(width: GuideStyle.timelineWidth, height: CGFloat(visibleChannels.count) * (GuideStyle.rowHeight + 6), alignment: .topLeading)
                     }.frame(width: GuideStyle.timelineWidth)
                 }.scrollIndicators(.hidden)
             }

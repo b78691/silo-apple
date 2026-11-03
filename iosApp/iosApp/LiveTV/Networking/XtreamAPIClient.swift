@@ -150,7 +150,7 @@ actor XtreamAPIClient {
         do {
             let (data, response) = try await session.data(from: url)
             guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-                  data.count <= 150 * 1024 * 1024 else { throw IPTVError.serverUnavailable }
+                  data.count <= 24 * 1024 * 1024 else { throw IPTVError.serverUnavailable }
             return try await Task.detached(priority: .utility) { try XMLTVParser().parse(data: data) }.value
         } catch is CancellationError { throw CancellationError() }
         catch let error as IPTVError { throw error }

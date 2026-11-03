@@ -46,7 +46,7 @@ private final class IPTVSettingsModel {
     func refresh() async {
         isWorking = true; statusMessage = nil
         defer { isWorking = false }
-        await LiveTVStore.shared.refresh()
+        await LiveTVStore.shared.refresh(includeXMLTV: true)
         account = LiveTVStore.shared.account
         switch LiveTVStore.shared.phase {
         case .ready: statusMessage = "Channels and guide refreshed"
