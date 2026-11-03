@@ -11,6 +11,7 @@ final class LiveTVPlaybackCoordinator {
     private(set) var channel: LiveChannel?
     private(set) var state: PlaybackState = .idle
     private(set) var errorMessage: String?
+    private(set) var isPaused = false
     private var loadTask: Task<Void, Never>?
     private var cancellables: Set<AnyCancellable> = []
 
@@ -26,6 +27,7 @@ final class LiveTVPlaybackCoordinator {
         loadTask?.cancel()
         self.channel = channel
         errorMessage = nil
+        isPaused = false
         store.recordWatched(channel)
         loadTask = Task {
             do {
@@ -44,5 +46,10 @@ final class LiveTVPlaybackCoordinator {
     }
 
     func stop() { loadTask?.cancel(); loadTask = nil; playback.stop() }
+
+    func togglePause() {
+        if isPaused { playback.play() } else { playback.pause() }
+        isPaused.toggle()
+    }
 }
 #endif

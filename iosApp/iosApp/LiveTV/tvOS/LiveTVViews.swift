@@ -10,7 +10,7 @@ private enum LiveTVSection: String, CaseIterable, Identifiable {
 struct LiveTVRootView: View {
     @State private var store = LiveTVStore.shared
     @State private var preferences = IPTVPreferencesStore.shared
-    @State private var section: LiveTVSection = .channels
+    @State private var section: LiveTVSection = .guide
     @State private var playingChannel: LiveChannel?
     let focusRequest: Int
     let isTopMenuFocused: Bool
@@ -21,7 +21,7 @@ struct LiveTVRootView: View {
             .padding(.top, 118).padding(.horizontal, 72)
             .task { await store.bootstrap() }
             .fullScreenCover(item: $playingChannel) { channel in
-                LiveTVPlayerView(channel: channel, store: store) { playingChannel = nil }
+                LiveTVModernPlayerView(channel: channel, store: store) { playingChannel = nil }
             }
     }
 
@@ -39,8 +39,13 @@ struct LiveTVRootView: View {
             VStack(spacing: 24) { Text("Live TV is unavailable").font(.largeTitle.bold()); Text(message); Button("Try Again") { Task { await store.refresh() } } }
         case .ready:
             VStack(alignment: .leading, spacing: 24) {
-                HStack { Text("Live TV").font(.system(size: 52, weight: .bold)); Spacer(); TextField("Search channels", text: $store.query).frame(width: 430) }
-                Picker("Section", selection: $section) { ForEach(LiveTVSection.allCases) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented)
+                HStack { Label("Live TV", systemImage: "dot.radiowaves.left.and.right").font(.system(size: 46, weight: .bold)); Spacer(); TextField("Search channels", text: $store.query).frame(width: 380) }
+                HStack(spacing: 12) {
+                    ForEach(LiveTVSection.allCases) { item in
+                        Button(item.rawValue) { section = item }.buttonStyle(LiveTVChipStyle(isSelected: section == item))
+                    }
+                    Spacer(minLength: 0)
+                }
                 sectionContent
             }
         }
@@ -55,7 +60,7 @@ struct LiveTVRootView: View {
             ScrollView { LazyVGrid(columns: [GridItem(.adaptive(minimum: 310), spacing: 24)], spacing: 24) {
                 ForEach(store.categories) { category in Button(category.name) { store.selectedCategoryID = category.id; section = .channels }.buttonStyle(.borderedProminent) }
             }.padding(24) }
-        case .guide: EPGGuideView(store: store, play: { playingChannel = $0 })
+        case .guide: LiveTVGuideView(store: store, play: { playingChannel = $0 })
         }
     }
 }
