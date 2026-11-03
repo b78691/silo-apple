@@ -7,6 +7,7 @@ final class LiveTVStore {
 
     enum Phase: Equatable { case unconfigured, loading, ready, failed(String) }
     private(set) var phase: Phase = .unconfigured
+    private(set) var refreshError: String?
     private(set) var account: XtreamAccount?
     private(set) var categories: [LiveCategory] = []
     private(set) var channels: [LiveChannel] = []
@@ -54,6 +55,7 @@ final class LiveTVStore {
 
     func refresh(silent: Bool = false) async {
         refreshTask?.cancel()
+        refreshError = nil
         guard let provider = IPTVPreferencesStore.shared.provider else { phase = .unconfigured; return }
         if !silent { phase = .loading }
         let task = Task { [api, credentials, cache] in
@@ -72,7 +74,9 @@ final class LiveTVStore {
             } catch is CancellationError { }
             catch {
                 await MainActor.run {
-                    if !silent || self.channels.isEmpty { self.phase = .failed((error as? LocalizedError)?.errorDescription ?? "Live TV could not be refreshed.") }
+                    let message = (error as? LocalizedError)?.errorDescription ?? "Live TV could not be refreshed."
+                    self.refreshError = message
+                    if !silent || self.channels.isEmpty { self.phase = .failed(message) }
                 }
             }
         }

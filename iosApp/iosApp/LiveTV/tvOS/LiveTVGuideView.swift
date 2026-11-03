@@ -79,6 +79,8 @@ struct LiveTVGuideView: View {
     @State private var selection = GuideSelection()
     @State private var anchor = LiveTVGuideView.rounded(Date()).addingTimeInterval(-1800)
     @State private var filter: GuideFilter = .all
+    @State private var isRefreshing = false
+    @State private var refreshMessage: String?
 
     private var channels: [LiveChannel] {
         let matching = store.filteredChannels
@@ -118,6 +120,24 @@ struct LiveTVGuideView: View {
                         Button("Now") { anchor = Self.rounded(Date()).addingTimeInterval(-1800) }
                         Button { anchor = anchor.addingTimeInterval(7200) } label: { Label("Later", systemImage: "chevron.right") }
                         Spacer()
+                        if let refreshMessage {
+                            Text(refreshMessage).font(.system(size: 16)).foregroundStyle(.white.opacity(0.67)).lineLimit(1)
+                        }
+                        Button {
+                            guard !isRefreshing else { return }
+                            isRefreshing = true
+                            refreshMessage = nil
+                            Task {
+                                await store.refresh(silent: true)
+                                refreshMessage = store.refreshError ?? "Playlist updated"
+                                isRefreshing = false
+                            }
+                        } label: {
+                            if isRefreshing { ProgressView().frame(width: 26, height: 26) }
+                            else { Image(systemName: "arrow.clockwise").frame(width: 26, height: 26) }
+                        }
+                        .disabled(isRefreshing)
+                        .accessibilityLabel("Refresh Live TV playlist and guide")
                     }.buttonStyle(LiveTVChipStyle(isSelected: false))
                     guideGrid
                 }
