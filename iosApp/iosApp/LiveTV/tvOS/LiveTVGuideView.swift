@@ -44,10 +44,10 @@ struct LiveTVChipStyle: ButtonStyle {
 private struct GuideSidebarStyle: ButtonStyle {
     let isSelected: Bool
     func makeBody(configuration: Configuration) -> some View {
-        Body(configuration: configuration, isSelected: isSelected)
+        SidebarButtonBody(configuration: configuration, isSelected: isSelected)
     }
 
-    private struct Body: View {
+    private struct SidebarButtonBody: View {
         let configuration: ButtonStyleConfiguration
         let isSelected: Bool
         @Environment(\.isFocused) private var focused
@@ -107,7 +107,7 @@ struct LiveTVGuideView: View {
                 Label("Live TV", systemImage: "dot.radiowaves.left.and.right")
                     .font(.system(size: 43, weight: .bold))
                 Spacer()
-                TextField("Search channels", text: $store.query).frame(width: 350)
+                TextField("Search channels", text: Binding(get: { store.query }, set: { store.query = $0 })).frame(width: 350)
             }
             HStack(alignment: .top, spacing: 24) {
                 sidebar
