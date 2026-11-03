@@ -2,6 +2,45 @@ import AetherEngine
 import AVFoundation
 import Foundation
 
+extension AetherLoadSpec {
+    /// A direct live source that does not participate in Silo's VOD playback
+    /// session protocol. Xtream credentials remain in the URL held by the
+    /// engine and are never copied into diagnostics or server requests.
+    @MainActor
+    init(liveURL: URL, usesNativeHLS: Bool) throws {
+        guard ["http", "https"].contains(liveURL.scheme?.lowercased() ?? "") else {
+            throw ValidationError.invalidStreamURL("redacted-live-source")
+        }
+        planID = "iptv-live"
+        sessionID = UUID().uuidString
+        delivery = usesNativeHLS ? PlaybackProtocolV3.PlanDelivery.remuxHLS : PlaybackProtocolV3.PlanDelivery.originalHTTP
+        sourceURL = liveURL
+        timeline = PlaybackTimelineMapper(directStartSeconds: 0)
+        aetherStartPosition = 0
+        audioSourceStreamIndex = nil
+        externalSubtitleAppTrackIDs = []
+        subtitleFontRequests = [:]
+        subtitleRequestAuthorization = nil
+        subtitleAuthorizationOrigin = nil
+        requestHeaderResolver = nil
+        embeddedSubtitleAlias = nil
+        declaresEmbeddedTrackExtract = false
+        hlsSubtitleRenditions = [:]
+        options = LoadOptions(
+            panelIsInHDRMode: AetherDisplayContext.panelIsInHDRMode,
+            isLive: true,
+            dvrWindowSeconds: nil,
+            liveJoinProfile: .fastZap,
+            liveJoinStartsImmediately: true,
+            nativeRemoteHLS: usesNativeHLS,
+            nativeRemoteHLSIngestFallback: true,
+            prepareNativeSubtitles: true,
+            eagerNativeSubtitleReaders: true,
+            autoplay: false
+        )
+    }
+}
+
 /// Resolves the language hint Aether uses for its initial audio pick.
 ///
 /// A Protocol V3 plan's selected audio ordinal is authoritative. Feeding the

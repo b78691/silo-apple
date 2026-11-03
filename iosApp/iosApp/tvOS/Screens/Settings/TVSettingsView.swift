@@ -322,6 +322,7 @@ struct TVSettingsView: View {
     }
 
     private func initialDetailFocus(for category: TVSettingsCategory) -> TVSettingsDetailFocus {
+        if category == .iptv { return .iptvEdit }
         if category == .general {
             return .generalAppleTVUser
         }
@@ -524,6 +525,8 @@ struct TVSettingsView: View {
                 detailFocus: $detailFocus,
                 presentPicker: presentPicker
             )
+        case .iptv:
+            TVIPTVSettingsPane(detailFocus: $detailFocus)
         case .diagnostics:
             TVDiagnosticsSettingsPane(model: diagnosticsModel, detailFocus: $detailFocus)
         case .server:
@@ -678,6 +681,10 @@ enum TVSettingsDetailFocus: Hashable {
     case subtitleBackgroundOpacity
     case subtitleBackgroundColor
     case subtitlePosition
+    case iptvEdit
+    case iptvRefresh
+    case iptvClearCache
+    case iptvRemove
     case serverPrivacyPolicy
     case serverOpenSourceLicenses
     case serverExperimental(ExperimentalFeature)
@@ -689,6 +696,7 @@ enum TVSettingsCategory: String, CaseIterable, Identifiable {
     case general
     case playback
     case subtitles
+    case iptv
     case diagnostics
     case server
 
@@ -699,6 +707,7 @@ enum TVSettingsCategory: String, CaseIterable, Identifiable {
         case .general: return "General"
         case .playback: return "Playback"
         case .subtitles: return "Subtitles"
+        case .iptv: return "IPTV"
         case .diagnostics: return "Diagnostics"
         case .server: return "Server"
         }
@@ -709,6 +718,7 @@ enum TVSettingsCategory: String, CaseIterable, Identifiable {
         case .general: return "gearshape"
         case .playback: return "play.rectangle"
         case .subtitles: return "captions.bubble"
+        case .iptv: return "tv"
         case .diagnostics: return "stethoscope"
         case .server: return "server.rack"
         }
@@ -722,6 +732,8 @@ enum TVSettingsCategory: String, CaseIterable, Identifiable {
             return "Streaming quality and episode behavior for this Apple TV."
         case .subtitles:
             return "Language, behavior, and on-screen appearance."
+        case .iptv:
+            return "Connect and manage an Xtream Live TV provider."
         case .diagnostics:
             return "Review and send diagnostics to this Silo server."
         case .server:
@@ -734,6 +746,7 @@ enum TVSettingsCategory: String, CaseIterable, Identifiable {
         case .general: return "App and navigation"
         case .playback: return "Quality and episodes"
         case .subtitles: return "Language and appearance"
+        case .iptv: return "Live TV provider"
         case .diagnostics: return "Reports and support"
         case .server: return "Connection and version"
         }

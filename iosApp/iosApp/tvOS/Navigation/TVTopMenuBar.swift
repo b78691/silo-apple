@@ -80,6 +80,7 @@ enum TVLibraryTabType: String, CaseIterable, Hashable {
 
 enum TVRootDestination: Hashable {
     case home
+    case liveTV
     case recommendations
     case libraryType(TVLibraryTabType)
     case calendar
@@ -87,6 +88,7 @@ enum TVRootDestination: Hashable {
     var title: String {
         switch self {
         case .home: return "Home"
+        case .liveTV: return "Live TV"
         case .recommendations: return "For You"
         case .libraryType(let type): return type.title
         case .calendar: return "Calendar"
@@ -98,13 +100,14 @@ enum TVRootDestination: Hashable {
     /// opt-in. Search and the profile avatar sit outside this list.
     static func visibleRoots(
         libraries: [Library],
-        showAudiobooks: Bool
+        showAudiobooks: Bool,
+        showLiveTV: Bool = false
     ) -> [TVRootDestination] {
         let types = TVLibraryTabType.allCases.filter { type in
             (type != .audiobooks || showAudiobooks)
                 && libraries.contains(where: { type.matches($0) })
         }
-        return [.home] + types.map(TVRootDestination.libraryType) + [.recommendations, .calendar]
+        return [.home] + (showLiveTV ? [.liveTV] : []) + types.map(TVRootDestination.libraryType) + [.recommendations, .calendar]
     }
 }
 
@@ -471,7 +474,7 @@ struct TVTopMenuBar: View {
         switch root {
         case .libraryType, .recommendations:
             return .root(root)
-        case .home, .calendar:
+        case .home, .liveTV, .calendar:
             return nil
         }
     }
@@ -482,7 +485,7 @@ struct TVTopMenuBar: View {
             return "Rest to choose a library"
         case .recommendations:
             return "Rest to choose Watchlist, Favorites, or Recommendations"
-        case .home, .calendar:
+        case .home, .liveTV, .calendar:
             return ""
         }
     }

@@ -53,6 +53,7 @@ struct TVMainTabView: View {
     /// Kept here so `.task` can `refresh()` it for the now-known profile.
     @State private var navPrefs = AppNavPreferences.shared
     @State private var uiCustomization = UICustomizationPreferences.shared
+    @State private var iptvPreferences = IPTVPreferencesStore.shared
     /// Visible libraries for the active profile; drives which type tabs
     /// exist and which library each type tab scopes to. Seeded from the
     /// startup prefetch so all type tabs are in the bar's first frame —
@@ -453,6 +454,12 @@ struct TVMainTabView: View {
                 isTopMenuFocused: menuOwnsFocus,
                 onTopMenuFocusRequest: { focusTopMenuIfVisible() }
             )
+        case .liveTV:
+            LiveTVRootView(
+                focusRequest: contentFocusRequest,
+                isTopMenuFocused: menuOwnsFocus,
+                onTopMenuFocusRequest: { focusTopMenuIfVisible() }
+            )
         case .recommendations:
             RecommendationsView(
                 focusRequest: contentFocusRequest,
@@ -545,7 +552,7 @@ struct TVMainTabView: View {
             switch root {
             case .libraryType, .recommendations:
                 return .root(root)
-            case .home, .calendar:
+            case .home, .liveTV, .calendar:
                 return nil
             }
         }
@@ -666,7 +673,7 @@ struct TVMainTabView: View {
                 cascadePanel(for: type, isActive: isActive)
             case .recommendations:
                 forYouPanel(isActive: isActive)
-            case .home, .calendar:
+            case .home, .liveTV, .calendar:
                 EmptyView()
             }
         case .profile:
@@ -957,7 +964,8 @@ struct TVMainTabView: View {
     private var visibleRoots: [TVRootDestination] {
         TVRootDestination.visibleRoots(
             libraries: libraries,
-            showAudiobooks: navPrefs.showAudiobooks
+            showAudiobooks: navPrefs.showAudiobooks,
+            showLiveTV: iptvPreferences.isConfigured
         )
     }
 
