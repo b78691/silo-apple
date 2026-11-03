@@ -20,6 +20,7 @@ final class LiveTVStore {
     private let cache: IPTVCache
     private var refreshTask: Task<Void, Never>?
     private var epgTasks: [Int: Task<Void, Never>] = [:]
+    private var epgAttemptedAt: [Int: Date] = [:]
     private let epgRequestGate = IPTVEPGRequestGate(limit: 6)
     private var xmlTVTask: Task<Void, Never>?
 
@@ -89,6 +90,8 @@ final class LiveTVStore {
     func loadEPG(for channel: LiveChannel) {
         guard programmesForChannel(channel).isEmpty, epgTasks[channel.id] == nil,
               let provider = IPTVPreferencesStore.shared.provider else { return }
+        if let lastAttempt = epgAttemptedAt[channel.id], Date().timeIntervalSince(lastAttempt) < 300 { return }
+        epgAttemptedAt[channel.id] = Date()
         epgTasks[channel.id] = Task { [api, credentials, epgRequestGate] in
             defer { Task { @MainActor in self.epgTasks[channel.id] = nil } }
             do {
@@ -104,6 +107,11 @@ final class LiveTVStore {
                 await MainActor.run { self.programmes[key] = rows.sorted { $0.start < $1.start } }
             } catch { }
         }
+    }
+
+    func cancelEPG(for channel: LiveChannel) {
+        epgTasks[channel.id]?.cancel()
+        epgAttemptedAt[channel.id] = nil
     }
 
     func programmesForChannel(_ channel: LiveChannel) -> [EPGProgramme] {
@@ -131,7 +139,7 @@ final class LiveTVStore {
     }
 
     func reset() {
-        refreshTask?.cancel(); xmlTVTask?.cancel(); epgTasks.values.forEach { $0.cancel() }; epgTasks = [:]
+        refreshTask?.cancel(); xmlTVTask?.cancel(); epgTasks.values.forEach { $0.cancel() }; epgTasks = [:]; epgAttemptedAt = [:]
         account = nil; categories = []; channels = []; programmes = [:]; phase = .unconfigured
     }
 

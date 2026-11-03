@@ -84,18 +84,21 @@ struct LiveTVGuideView: View {
     @State private var refreshMessage: String?
     @State private var showingCategoryOrder = false
     @State private var channelPage = 0
+    @State private var displayedChannels: [LiveChannel] = []
 
-    private var channels: [LiveChannel] {
+    private var channels: [LiveChannel] { displayedChannels }
+
+    private func updateDisplayedChannels() {
         let matching = store.filteredChannels
         switch filter {
-        case .all: return matching
+        case .all: displayedChannels = matching
         case .favourites:
             let ids = IPTVPreferencesStore.shared.favoriteChannelIDs
-            return matching.filter { ids.contains($0.id) }
+            displayedChannels = matching.filter { ids.contains($0.id) }
         case .recent:
-            let byID = Dictionary(uniqueKeysWithValues: matching.map { ($0.id, $0) })
-            return IPTVPreferencesStore.shared.recentChannelIDs.compactMap { byID[$0] }
-        case .category(let id): return matching.filter { $0.categoryID == id }
+            let byID = Dictionary(matching.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            displayedChannels = IPTVPreferencesStore.shared.recentChannelIDs.compactMap { byID[$0] }
+        case .category(let id): displayedChannels = matching.filter { $0.categoryID == id }
         }
     }
 
@@ -161,8 +164,16 @@ struct LiveTVGuideView: View {
                 }
             }
         }
-        .onChange(of: filter) { _, _ in resetPage() }
-        .onChange(of: store.query) { _, _ in resetPage() }
+        .onAppear { updateDisplayedChannels(); resetPage() }
+        .onChange(of: filter) { _, _ in updateDisplayedChannels(); resetPage() }
+        .onChange(of: store.query) { _, _ in updateDisplayedChannels(); resetPage() }
+        .onChange(of: store.channels) { _, _ in updateDisplayedChannels(); resetPage() }
+        .onChange(of: IPTVPreferencesStore.shared.favoriteChannelIDs) { _, _ in
+            if filter == .favourites { updateDisplayedChannels(); resetPage() }
+        }
+        .onChange(of: IPTVPreferencesStore.shared.recentChannelIDs) { _, _ in
+            if filter == .recent { updateDisplayedChannels(); resetPage() }
+        }
         .sheet(isPresented: $showingCategoryOrder) {
             LiveTVCategoryOrderView(categories: store.categories) { ids in
                 store.reorderCategories(ids)
@@ -271,6 +282,7 @@ struct LiveTVGuideView: View {
                         .frame(width: GuideStyle.channelWidth, height: 40, alignment: .leading)
                     ForEach(visibleChannels) { channel in
                         GuideChannelCell(channel: channel, store: store, selection: selection, play: play)
+                            .equatable()
                     }
                 }.frame(width: GuideStyle.channelWidth)
                 ScrollView(.horizontal) {
@@ -280,6 +292,7 @@ struct LiveTVGuideView: View {
                             LazyVStack(spacing: 6) {
                                 ForEach(visibleChannels) { channel in
                                     GuideProgrammeRow(channel: channel, store: store, anchor: anchor, selection: selection, play: play)
+                                        .equatable()
                                 }
                             }
                             TimelineView(.periodic(from: .now, by: 60)) { context in
@@ -316,12 +329,17 @@ struct LiveTVGuideView: View {
     }
 }
 
-private struct GuideChannelCell: View {
+private struct GuideChannelCell: View, Equatable {
     let channel: LiveChannel
     let store: LiveTVStore
     let selection: GuideSelection
     let play: (LiveChannel) -> Void
     @FocusState private var focused: Bool
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        // Focus changes update the hero, while this cell's own focus state drives its border.
+        lhs.channel == rhs.channel && lhs.store === rhs.store && lhs.selection === rhs.selection
+    }
 
     var body: some View {
         Button { play(channel) } label: {
@@ -340,16 +358,21 @@ private struct GuideChannelCell: View {
         .buttonStyle(.plain).focused($focused)
         .onChange(of: focused) { _, value in if value { selection.select(channel, store.currentProgramme(for: channel)) } }
         .contextMenu { Button(IPTVPreferencesStore.shared.favoriteChannelIDs.contains(channel.id) ? "Remove from Favourites" : "Add to Favourites") { store.toggleFavorite(channel) } }
-        .task { store.loadEPG(for: channel) }
     }
 }
 
-private struct GuideProgrammeRow: View {
+private struct GuideProgrammeRow: View, Equatable {
     let channel: LiveChannel
     let store: LiveTVStore
     let anchor: Date
     let selection: GuideSelection
     let play: (LiveChannel) -> Void
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        // Programme changes observed through `store` invalidate this row directly.
+        lhs.channel == rhs.channel && lhs.anchor == rhs.anchor
+            && lhs.store === rhs.store && lhs.selection === rhs.selection
+    }
 
     var body: some View {
         ZStack(alignment: .leading) {
@@ -368,6 +391,7 @@ private struct GuideProgrammeRow: View {
         }
         .frame(width: GuideStyle.timelineWidth, height: GuideStyle.rowHeight)
         .task { store.loadEPG(for: channel) }
+        .onDisappear { store.cancelEPG(for: channel) }
     }
 }
 
