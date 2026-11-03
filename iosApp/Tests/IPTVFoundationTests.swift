@@ -36,6 +36,28 @@ final class IPTVFoundationTests: XCTestCase {
         XCTAssertEqual(store.recentChannelIDs.first, 49)
     }
 
+    @MainActor func testRearrangedCategoriesSurviveRefreshAndNewCategoriesFollowProviderOrder() {
+        let suite = "IPTVCategoryOrderTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let provider = IPTVProvider(serverURL: URL(string: "https://iptv.example")!)
+        let preferences = IPTVPreferencesStore(defaults: defaults)
+        preferences.setProvider(provider)
+        preferences.saveCategoryOrder(["sports", "news"])
+
+        let refreshed = ["new-top", "news", "new-middle", "sports", "new-bottom"].map {
+            LiveCategory(id: $0, name: $0, parentID: nil)
+        }
+        XCTAssertEqual(preferences.orderedCategories(refreshed).map(\.id),
+                       ["sports", "news", "new-top", "new-middle", "new-bottom"])
+
+        let reloaded = IPTVPreferencesStore(defaults: defaults)
+        XCTAssertEqual(reloaded.orderedCategories(refreshed).map(\.id),
+                       ["sports", "news", "new-top", "new-middle", "new-bottom"])
+        reloaded.clearProviderData()
+        XCTAssertEqual(reloaded.orderedCategories(refreshed).map(\.id), refreshed.map(\.id))
+    }
+
     func testXtreamAuthenticationAndTolerantChannelMapping() async throws {
         let stub = StubURLProtocol.Handler()
         stub.route(StubURLProtocol.path("/player_api.php")) { request in

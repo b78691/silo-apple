@@ -35,20 +35,37 @@ final class IPTVPreferencesStore {
     private let providerKey = "iptv.provider.v1"
     private let favoritesKey = "iptv.favorites.v1"
     private let recentKey = "iptv.recent.v1"
+    private let categoryOrderKey = "iptv.categoryOrder.v1"
     private(set) var provider: IPTVProvider?
     private(set) var favoriteChannelIDs: Set<Int> = []
     private(set) var recentChannelIDs: [Int] = []
+    private(set) var orderedCategoryIDs: [String] = []
+
+    private struct CategoryOrderRecord: Codable {
+        let providerID: UUID
+        let ids: [String]
+    }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         provider = defaults.data(forKey: providerKey).flatMap { try? JSONDecoder().decode(IPTVProvider.self, from: $0) }
         favoriteChannelIDs = Set(defaults.array(forKey: favoritesKey) as? [Int] ?? [])
         recentChannelIDs = defaults.array(forKey: recentKey) as? [Int] ?? []
+        if let provider,
+           let data = defaults.data(forKey: categoryOrderKey),
+           let record = try? JSONDecoder().decode(CategoryOrderRecord.self, from: data),
+           record.providerID == provider.id {
+            orderedCategoryIDs = record.ids
+        }
     }
 
     var isConfigured: Bool { provider != nil }
 
     func setProvider(_ provider: IPTVProvider?) {
+        if self.provider?.id != provider?.id {
+            orderedCategoryIDs = []
+            defaults.removeObject(forKey: categoryOrderKey)
+        }
         self.provider = provider
         if let provider, let data = try? JSONEncoder().encode(provider) { defaults.set(data, forKey: providerKey) }
         else { defaults.removeObject(forKey: providerKey) }
@@ -66,12 +83,30 @@ final class IPTVPreferencesStore {
         defaults.set(recentChannelIDs, forKey: recentKey)
     }
 
+    func orderedCategories(_ categories: [LiveCategory]) -> [LiveCategory] {
+        guard !orderedCategoryIDs.isEmpty else { return categories }
+        let byID = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let saved = orderedCategoryIDs.compactMap { byID[$0] }
+        let savedIDs = Set(orderedCategoryIDs)
+        return saved + categories.filter { !savedIDs.contains($0.id) }
+    }
+
+    func saveCategoryOrder(_ ids: [String]) {
+        guard let provider else { return }
+        var seen = Set<String>()
+        orderedCategoryIDs = ids.filter { seen.insert($0).inserted }
+        let record = CategoryOrderRecord(providerID: provider.id, ids: orderedCategoryIDs)
+        if let data = try? JSONEncoder().encode(record) { defaults.set(data, forKey: categoryOrderKey) }
+    }
+
     func clearProviderData() {
         setProvider(nil)
         favoriteChannelIDs = []
         recentChannelIDs = []
+        orderedCategoryIDs = []
         defaults.removeObject(forKey: favoritesKey)
         defaults.removeObject(forKey: recentKey)
+        defaults.removeObject(forKey: categoryOrderKey)
     }
 }
 

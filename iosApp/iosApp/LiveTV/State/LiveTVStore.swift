@@ -115,6 +115,10 @@ final class LiveTVStore {
 
     func toggleFavorite(_ channel: LiveChannel) { IPTVPreferencesStore.shared.toggleFavorite(channel.id) }
     func recordWatched(_ channel: LiveChannel) { IPTVPreferencesStore.shared.recordRecent(channel.id) }
+    func reorderCategories(_ ids: [String]) {
+        IPTVPreferencesStore.shared.saveCategoryOrder(ids)
+        categories = IPTVPreferencesStore.shared.orderedCategories(categories)
+    }
 
     func streamURL(for channel: LiveChannel) async throws -> URL {
         guard let provider = IPTVPreferencesStore.shared.provider, let login = try credentials.load() else { throw IPTVError.credentialsMissing }
@@ -128,7 +132,7 @@ final class LiveTVStore {
 
     private func apply(_ snapshot: IPTVSnapshot) {
         account = snapshot.account
-        categories = snapshot.categories.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        categories = IPTVPreferencesStore.shared.orderedCategories(snapshot.categories)
         channels = snapshot.channels.sorted { ($0.number ?? Int.max, $0.name) < ($1.number ?? Int.max, $1.name) }
         programmes = snapshot.programmes.mapValues { $0.sorted { $0.start < $1.start } }
         phase = .ready

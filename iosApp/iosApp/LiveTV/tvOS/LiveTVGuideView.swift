@@ -81,6 +81,7 @@ struct LiveTVGuideView: View {
     @State private var filter: GuideFilter = .all
     @State private var isRefreshing = false
     @State private var refreshMessage: String?
+    @State private var showingCategoryOrder = false
 
     private var channels: [LiveChannel] {
         let matching = store.filteredChannels
@@ -144,6 +145,11 @@ struct LiveTVGuideView: View {
             }
         }
         .onChange(of: filter) { _, _ in selection.select(channels.first, nil) }
+        .sheet(isPresented: $showingCategoryOrder) {
+            LiveTVCategoryOrderView(categories: store.categories) { ids in
+                store.reorderCategories(ids)
+            }
+        }
     }
 
     private var sidebar: some View {
@@ -157,6 +163,10 @@ struct LiveTVGuideView: View {
                     sidebarButton("Recently Watched", icon: "clock.arrow.circlepath", filter: .recent)
                     Text("CATEGORIES").font(.system(size: 16, weight: .bold))
                         .foregroundStyle(.white.opacity(0.5)).padding(.horizontal, 15).padding(.top, 21)
+                    Button { showingCategoryOrder = true } label: {
+                        Label("Rearrange Categories", systemImage: "arrow.up.arrow.down")
+                            .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                    }.buttonStyle(GuideSidebarStyle(isSelected: false))
                     ForEach(store.categories) { category in
                         sidebarButton(category.name, icon: "square.stack", filter: .category(category.id))
                     }
